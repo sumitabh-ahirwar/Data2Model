@@ -183,6 +183,35 @@ else:
                                     )
                                 else:
                                     st.error("Model artifacts not available right now.")
+                                    
+                                st.divider()
+                                st.markdown("#### 🧪 Test This Model")
+                                st.write("Upload a sample CSV file with the same features to get predictions.")
+                                test_file = st.file_uploader("Upload Test CSV", type=["csv"], key=f"test_{sub_id}")
+                                
+                                if test_file is not None:
+                                    if st.button("🔮 Generate Predictions", key=f"pred_btn_{sub_id}"):
+                                        with st.spinner("Wait for it... Running Inference..."):
+                                            files = {"test_data": (test_file.name, test_file, test_file.type)}
+                                            p_res = requests.post(f"{API_URL}/submit/{sub_id}/predict", headers=get_headers(), files=files)
+                                            
+                                            if p_res.status_code == 200:
+                                                st.success("Predictions generated successfully!")
+                                                # Convert CSV bytes back to dataframe to show nicely in UI
+                                                import pandas as pd
+                                                import io
+                                                df_preds = pd.read_csv(io.BytesIO(p_res.content))
+                                                st.dataframe(df_preds)
+                                                
+                                                st.download_button(
+                                                    label="⬇️ Download Predictions CSV",
+                                                    data=p_res.content,
+                                                    file_name=f"predictions_{test_file.name}",
+                                                    mime="text/csv",
+                                                    key=f"dl_pred_{sub_id}"
+                                                )
+                                            else:
+                                                st.error(f"Error making predictions: {p_res.text}")
             else:
                 st.error("Failed to load submissions.")
         except requests.exceptions.ConnectionError:

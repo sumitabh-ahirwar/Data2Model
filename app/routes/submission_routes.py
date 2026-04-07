@@ -152,3 +152,41 @@ async def download_model(
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename={safe_name}_model_artifacts.zip"}
     )
+
+
+@router.post("/{submission_id}/predict")
+async def predict_with_model(
+    submission_id: str,
+    test_data: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+    submission_service: SubmissionService = Depends(get_submission_service)
+):
+    """Feeds new sample data into the completed model and returns predictions."""
+    sub = await submission_service.get_submission(submission_id)
+    if not sub:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    if str(sub["user_id"]) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    if sub.get("status") != "completed" or not sub.get("model_artifact"):
+        raise HTTPException(status_code=400, detail="Model is not fully trained yet.")
+        
+    if test_data.filename and not test_data.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Only CSV sample data is supported.")
+        
+    sample_bytes = await test_data.read()
+    
+    # Import locally because it depends on torch which is heavy
+    from app.utils.predict_utils import run_prediction_pipeline
+    
+    try:
+        result = run_prediction_pipeline(submission_id, sub, sample_bytes)
+        return Response(
+            content=result["predictions_csv"],
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={submission_id}_predictions.csv"}
+        )
+    except Exception as e:
+        print("Error during prediction:", str(e))
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+
