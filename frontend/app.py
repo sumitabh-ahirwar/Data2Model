@@ -197,15 +197,26 @@ else:
                                             
                                             if p_res.status_code == 200:
                                                 st.success("Predictions generated successfully!")
-                                                # Convert CSV bytes back to dataframe to show nicely in UI
+                                                
+                                                res_data = p_res.json()
+                                                csv_content = res_data["csv_data"]
+                                                metrics = res_data.get("metrics")
+                                                
+                                                if metrics:
+                                                    st.markdown("### 📊 Test Metrics")
+                                                    cols = st.columns(len(metrics))
+                                                    for idx, (k, v) in enumerate(metrics.items()):
+                                                        cols[idx].metric(label=k, value=f"{v:.4f}")
+                                                
+                                                # Convert CSV string back to dataframe to show nicely in UI
                                                 import pandas as pd
                                                 import io
-                                                df_preds = pd.read_csv(io.BytesIO(p_res.content))
+                                                df_preds = pd.read_csv(io.StringIO(csv_content))
                                                 st.dataframe(df_preds)
                                                 
                                                 st.download_button(
                                                     label="⬇️ Download Predictions CSV",
-                                                    data=p_res.content,
+                                                    data=csv_content.encode("utf-8"),
                                                     file_name=f"predictions_{test_file.name}",
                                                     mime="text/csv",
                                                     key=f"dl_pred_{sub_id}"

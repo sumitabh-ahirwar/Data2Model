@@ -84,11 +84,61 @@ def run_prediction_pipeline(submission_id: str, submission: dict, sample_bytes: 
     if os.path.exists(local_orig):
         os.remove(local_orig)
 
+    # Compute testing metrics if actual ground truth is available
+    metrics = None
+    
+    # Try to find target column (case-insensitive)
+    actual_target_col = None
+    for col in df_sample.columns:
+        if col.lower().strip() == target_col.lower().strip():
+            actual_target_col = col
+            break
+            
+    if actual_target_col:
+        actuals = df_sample[actual_target_col].values
+        # Safe valid idx check across all dtypes
+        valid_idx = ~pd.isna(actuals)
+        if valid_idx.any():
+            problem_type = config_dict.get("input_state", {}).get("problem_type", "regression")
+            
+            if problem_type == "classification":
+                from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+                preds_rounded = np.round(predictions[valid_idx])
+                actuals_valid = actuals[valid_idx]
+                
+                is_multiclass = len(np.unique(actuals_valid)) > 2
+                avg_type = "macro" if is_multiclass else "binary"
+                
+                try:
+                    acc = float(accuracy_score(actuals_valid, preds_rounded))
+                    prec = float(precision_score(actuals_valid, preds_rounded, average=avg_type, zero_division=0))
+                    rec = float(recall_score(actuals_valid, preds_rounded, average=avg_type, zero_division=0))
+                    f1 = float(f1_score(actuals_valid, preds_rounded, average=avg_type, zero_division=0))
+                    metrics = {
+                        "Accuracy": acc,
+                        "Precision": prec,
+                        "Recall": rec,
+                        "F1 Score": f1
+                    }
+                except Exception:
+                    problem_type = "regression" # Fallback if classification metrics fail
+            
+            if problem_type == "regression":
+                from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+                rmse = float(np.sqrt(mean_squared_error(actuals[valid_idx], predictions[valid_idx])))
+                mae = float(mean_absolute_error(actuals[valid_idx], predictions[valid_idx]))
+                r2 = float(r2_score(actuals[valid_idx], predictions[valid_idx]))
+                metrics = {
+                    "RMSE (Root Mean Sq Error)": rmse,
+                    "MAE (Mean Absolute Error)": mae,
+                    "R² (Coefficient of Det.)": r2
+                }
+
     # Attach predictions to new DF for easy CSV reporting
     df_sample[f"Predicted_{target_col}"] = predictions
 
     # Return CSV string
-    return {"predictions_csv": df_sample.to_csv(index=False)}
+    return {"csv_data": df_sample.to_csv(index=False), "metrics": metrics}
 
 def _preprocess_features(df: pd.DataFrame, target_col: str, is_training: bool, expected_cols: list = None):
     # Expand Date Features

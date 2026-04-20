@@ -63,16 +63,23 @@ class SubmissionService:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Pipeline processing failed: {str(e)}")
             
-        # 3. Upload to Cloudinary
-        try:
-            upload_result = cloudinary.uploader.upload(
-                file_content_to_upload, 
-                resource_type="raw", # raw is best for CSV/JSON files
-                folder="user_datasets",
-                public_id=f"{user_id}_{file.filename}"
-            )
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Cloudinary upload failed: {str(e)}")
+        # 3. Upload to Cloudinary with Retry Logic
+        import time
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                upload_result = cloudinary.uploader.upload_large(
+                    io.BytesIO(file_content_to_upload), 
+                    resource_type="raw", # raw is best for CSV/JSON files
+                    folder="user_datasets",
+                    public_id=f"{user_id}_{file.filename}"
+                )
+                break # Success!
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    time.sleep(2) # Wait 2 seconds before retrying
+                    continue
+                raise HTTPException(status_code=500, detail=f"Cloudinary upload failed after {max_retries} attempts: {str(e)}")
 
         dataset_url = upload_result.get("secure_url")
 

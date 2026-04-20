@@ -181,11 +181,7 @@ async def predict_with_model(
     
     try:
         result = run_prediction_pipeline(submission_id, sub, sample_bytes)
-        return Response(
-            content=result["predictions_csv"],
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={submission_id}_predictions.csv"}
-        )
+        return result
     except Exception as e:
         print("Error during prediction:", str(e))
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
