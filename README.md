@@ -73,7 +73,3 @@ You can directly run the core ML engine without the API/UI by traversing to the 
 ```bash
 python main.py --csv_path "data.csv" --target "Price" --use_case "Predicting house prices." --req "Optimize for minimal MAE."
 ```
-
-## 📜 License & Contribution
-
-*(Include any relevant license information or contribution guidelines here.)*
